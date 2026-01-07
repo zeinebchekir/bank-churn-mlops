@@ -1,5 +1,4 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches: [ main ]
@@ -8,75 +7,57 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_RESOURCE_GROUP: rg-mlops-bank-churn # le nom de la ressource group
-  ACR_NAME: mlopsnevermind  # le nom de l'ACR
-  CONTAINER_APP_NAME: bank-churn # le nom de l'api
-  IMAGE_NAME: bank-churn-api # le nom de l'image docker
+  # ⚠️ REMPLACEZ CES VALEURS PAR LES VÔTRES ⚠️
+  AZURE_RESOURCE_GROUP: rg-mlops-bank-churn-italy
+  ACR_NAME: mlopsm          # Le nom de VOTRE ACR (étape 5.1)
+  CONTAINER_APP_NAME: bank-churn  # Le nom de VOTRE Container App (étape 5.2)
+  IMAGE_NAME: bank-churn-api
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10' # pour une compatibilité avec les librairies ML
-      
+          python-version: '3.9'
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
-      
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
           pytest tests/ -v --cov=app --cov-report=term
-      
+
   build-and-deploy:
-    needs: test
+    needs: test  # Ne s'exécute QUE si les tests réussissent
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+    if: github.ref == 'refs/heads/main'  # Ne déploie que depuis 'main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
       - name: Azure Login
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Login to ACR
+          creds: ${{ secrets.AZURE_CREDENTIALS }}  # Utilise le secret formaté
+      - name: Login to Azure Container Registry (ACR)
         uses: azure/docker-login@v1
         with:
           login-server: ${{ env.ACR_NAME }}.azurecr.io
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
-      
       - name: Build and push Docker image
         run: |
-          echo "🔨 Construction de l'image Docker (avec nouveau modèle si model/ changé)..."
-  
-          # 1. UN SEUL BUILD avec le hash du commit
+          # Construit l'image et la tagge avec le hash unique du commit
           docker build -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          
-          # 2. TAGUER la MÊME image comme 'latest' (instantané)
+          # Crée aussi un tag 'latest' pour référence
           docker tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
-          
-          echo "🚀 Envoi vers Azure Container Registry..."
-          
-          # 3. Pousser les DEUX tags
+          # Pousse les deux images vers l'ACR
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
-          
-          echo "✅ Succès !"
-          echo "   - Image : ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "   - Latest : même image taggée"
-      
+          echo "✅ Images poussées dans ACR."
       - name: Deploy to Azure Container Apps
         uses: azure/CLI@v1
         with:
@@ -85,17 +66,17 @@ jobs:
               --name ${{ env.CONTAINER_APP_NAME }} \
               --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
               --image ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-      
+            echo "✅ Commande de déploiement envoyée à Azure."
       - name: Verify deployment
         run: |
+          # Récupère l'URL publique de l'application
           APP_URL=$(az containerapp show \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --query properties.configuration.ingress.fqdn -o tsv)
-          
-          echo "Application deployed at: https://$APP_URL"
-          
-          sleep 30
+          echo "🌐 Votre API est déployée à l'adresse : https://$APP_URL"
+          echo "🩺 Attente du démarrage (20s) et vérification..."
+          sleep 20
+          # Teste le endpoint /health
           curl -f https://$APP_URL/health || exit 1
-          
-          echo "Deployment successful!"
+          echo "✅ Déploiement vérifié et réussi !"
