@@ -6,6 +6,7 @@ Compatible API / Docker / Azure
 # =========================
 # BACKEND MATPLOTLIB SAFE
 # =========================
+from typing import Optional
 import matplotlib
 matplotlib.use("Agg")
 
@@ -37,7 +38,7 @@ def detect_drift(
     reference_file: str,
     production_file: str,
     threshold: float = 0.05,
-    output_dir: Path | None = None
+    output_dir: Optional[Path] = None
 ):
     """
     Détecte le drift entre données de référence et production
