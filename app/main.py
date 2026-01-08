@@ -160,6 +160,7 @@ def predict(features: CustomerFeatures):
             }
         })
         raise HTTPException(status_code=500, detail=str(e))
+    
 @app.post("/predict/batch")
 def predict_batch(features_list: List[CustomerFeatures]):
 
@@ -215,6 +216,9 @@ def predict_batch(features_list: List[CustomerFeatures]):
 # ============================================================
 # DRIFT LOGGING TO APPLICATION INSIGHTS
 # ============================================================
+
+
+
 
 def log_drift_to_insights(drift_results: dict):
 
@@ -297,3 +301,8 @@ def manual_drift_alert(
     })
 
     return {"status": "alert_sent"}
+
+
+@app.get("/test")
+def test_api():
+    return {"message": "API is working correctly"}
